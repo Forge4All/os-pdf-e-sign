@@ -70,13 +70,13 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 40px 20px;
+  padding: 20px 20px;
   width: 500px;
 }
 
 .logo {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 10px;
 }
 
 .logo h3 {
@@ -114,6 +114,45 @@ body {
   font-size: 14px;
 }
 
+.file-info {
+  font-size: 0.9rem;
+  color: #555;
+  margin-top: 5px;
+}
+
+.file-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.underline {
+  text-decoration: underline;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.file-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+}
+
+.remove-pdf-button {
+  background-color: tomato;
+  color: white;
+  border: none;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-left: 5px;
+}
+
 .checkbox {
   display: flex;
   align-items: center;
@@ -127,7 +166,7 @@ body {
 }
 
 .drop-zone {
-  height: 100px;
+  height: 150px;
   border: 2px dashed #bbb;
   border-radius: 8px;
   display: flex;
@@ -135,8 +174,8 @@ body {
   justify-content: center;
   color: #888;
   font-size: 14px;
-  cursor: pointer;
   transition: border-color 0.3s;
+  overflow: auto;
 }
 
 .drop-zone:hover {
