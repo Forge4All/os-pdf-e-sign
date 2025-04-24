@@ -199,6 +199,20 @@ body {
   background-color: #1c6cd9;
 }
 
+.restart-button {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background-color: #eee;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.progress-message {
+  margin-top: 0.5rem;
+  font-size: 14px;
+}
+
 .hidden {
   display: none;
 }

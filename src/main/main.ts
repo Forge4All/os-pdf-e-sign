@@ -29,75 +29,13 @@ class AppUpdater {
 
 let mainWindow: BrowserWindow | null = null;
 
-ipcMain.on('ipc-example', async (event, arg) => {
-  const msgTemplate = (pingPong: string) => `IPC test: ${pingPong}`;
-  console.log(msgTemplate(arg));
-  event.reply('ipc-example', msgTemplate('pong'));
-});
-
-ipcMain.handle('sign-pdfs', async (event, { password, cert, pdfs }) => {
-  try {
-    const fileManager = new TempFileManager();
-    const signedOutputDir = path.join(
-      os.homedir(),
-      'Desktop',
-      `signed-pdfs-${Date.now()}`,
-    );
-
-    fileManager.savePDFs(pdfs);
-    fileManager.saveCert(cert);
-
-    const certPath = fileManager.getCertPath();
-    const pdfDir = fileManager.getPdfDir();
-
-    if (!fs.existsSync(signedOutputDir)) {
-      fs.mkdirSync(signedOutputDir);
-    }
-
-    for (const pdf of pdfs) {
-      const inputFilePath = path.join(pdfDir, pdf.name);
-      const outputFilePath = path.join(signedOutputDir, pdf.name);
-
-      const signer = new PDFSigner(certPath!, password);
-      await signer.sign(inputFilePath, outputFilePath);
-    }
-
-    return {
-      success: true,
-      message: 'Files signed successfully!',
-      outPutDir: signedOutputDir,
-    };
-  } catch (error) {}
-});
-
-ipcMain.handle('clean-pdfs-temp-dir', async () => {
-  const fileManager = new TempFileManager();
-  const pdfDir = fileManager.getPdfDir();
-
-  fileManager.clearDir(pdfDir);
-});
-
-ipcMain.handle('clean-cert-temp-dir', async () => {
-  const fileManager = new TempFileManager();
-  const certDir = fileManager.getCertDir();
-
-  fileManager.clearDir(certDir);
-});
-
-ipcMain.handle('clean-all-temp-dir', async () => {
-  const fileManager = new TempFileManager();
-
-  fileManager.clearDir(fileManager.getPdfDir());
-  fileManager.clearDir(fileManager.getCertDir());
-});
+const isDebug =
+  process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
   sourceMapSupport.install();
 }
-
-const isDebug =
-  process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true';
 
 if (isDebug) {
   require('electron-debug').default();
@@ -131,8 +69,8 @@ const createWindow = async () => {
 
   mainWindow = new BrowserWindow({
     show: false,
-    width: 768,
-    height: 725,
+    width: 825,
+    height: 928,
     icon: getAssetPath('icon.png'),
     webPreferences: {
       preload: app.isPackaged
@@ -195,3 +133,53 @@ app
     });
   })
   .catch(console.log);
+
+ipcMain.handle('sign-pdfs', async (event, { password, cert, pdfs }) => {
+  try {
+    const fileManager = new TempFileManager();
+    const signedOutputDir = path.join(
+      os.homedir(),
+      'Desktop',
+      `signed-pdfs-${Date.now()}`,
+    );
+
+    fileManager.savePDFs(pdfs);
+    fileManager.saveCert(cert);
+
+    const certPath = fileManager.getCertPath();
+    const pdfDir = fileManager.getPdfDir();
+
+    if (!fs.existsSync(signedOutputDir)) {
+      fs.mkdirSync(signedOutputDir);
+    }
+
+    for (const pdf of pdfs) {
+      const inputFilePath = path.join(pdfDir, pdf.name);
+      const outputFilePath = path.join(signedOutputDir, pdf.name);
+
+      const signer = new PDFSigner(certPath!, password);
+      await signer.sign(inputFilePath, outputFilePath);
+    }
+
+    return {
+      success: true,
+      message: 'Files signed successfully!',
+      outPutDir: signedOutputDir,
+    };
+  } catch (error: any) {
+    console.error('Error signing PDFs:', error);
+    return {
+      success: false,
+      message: 'Error signing PDFs',
+      error: error.message,
+    };
+  }
+});
+
+ipcMain.handle('open-signed-dir-files', async (event, dirPath: string) => {
+  try {
+    shell.openPath(dirPath);
+  } catch (error) {
+    console.error('Error opening signed directory:', error);
+  }
+});

@@ -2,13 +2,7 @@
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-export type Channels =
-  | 'ipc-example'
-  | 'sign-pdfs'
-  | 'copy-file-to-temp-dir'
-  | 'clean-pdfs-temp-dir'
-  | 'clean-cert-temp-dir'
-  | 'clean-all-temp-dir';
+export type Channels = 'sign-pdfs' | 'open-signed-dir-files';
 
 const electronHandler = {
   ipcRenderer: {
@@ -32,17 +26,8 @@ const electronHandler = {
     },
   },
   api: {
-    copyFileToTempDir: (filePath: string, type: string) => {
-      ipcRenderer.invoke('copy-file-to-temp-dir', filePath, type);
-    },
-    cleanPdfsTempDir: () => {
-      ipcRenderer.invoke('clean-pdfs-temp-dir');
-    },
-    cleanCertTempDir: () => {
-      ipcRenderer.invoke('clean-cert-temp-dir');
-    },
-    cleanAllTempDir: () => {
-      ipcRenderer.invoke('clean-all-temp-dir');
+    openSignedDirFiles: (dirPath: string) => {
+      ipcRenderer.invoke('open-signed-dir-files', dirPath);
     },
   },
 };

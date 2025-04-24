@@ -5,35 +5,35 @@ import icon from '../../assets/logo.png';
 import './App.css';
 
 function Index() {
-  const [rememberPassword, setRememberPassword] = useState(true);
-  const [rememberCert, setRememberCert] = useState(true);
-
   const [password, setPassword] = useState('');
-  const [cert, setCert] = useState<File | null>(null);
   const [certName, setCertName] = useState('');
+  const [rememberPassword, setRememberPassword] = useState(true);
+
+  const [cert, setCert] = useState<File | null>(null);
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
+
   const [signing, setSigning] = useState(false);
-  const [signedFiles, setSignedFiles] = useState<File[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
+
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
   const [showProgress, setShowProgress] = useState(false);
-  const [showError, setShowError] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleInputsValidation = async () => {
     if (!password) {
-      return 'Please enter the certificate password.';
+      return 'Senha do certificado é obrigatória.';
     }
 
     if (!cert) {
-      return 'Please select a certificate file.';
+      return 'Certificado é obrigatório.';
     }
 
     if (pdfFiles.length === 0) {
-      return 'Please select at least one PDF file.';
+      return 'Arquivos PDF são obrigatórios.';
     }
 
     return null;
@@ -55,8 +55,7 @@ function Index() {
     const result = await handleInputsValidation();
 
     if (result) {
-      setError(result);
-      setShowError(true);
+      alert(result);
       return;
     }
 
@@ -70,8 +69,6 @@ function Index() {
     setProgressMessage('Signing files...');
     setError(null);
     setSuccess(false);
-    setShowError(false);
-    setSignedFiles([]);
 
     if (!cert) return;
     const certBuffer = await convertFileToBuffer(cert).then((buffer) => ({
@@ -95,6 +92,14 @@ function Index() {
       pdfs: pdfBuffers,
     });
 
+    if (response.success) {
+      setProgress(100);
+      setProgressMessage('Files signed successfully!');
+      setSuccess(true);
+
+      window.electron.api.openSignedDirFiles(response.outPutDir);
+    }
+
     console.log('Response from main process:', response);
   };
 
@@ -102,6 +107,7 @@ function Index() {
     const pdfFilesArray = Array.from(files).filter(
       (file) => file.type === 'application/pdf',
     );
+
     setPdfFiles(pdfFilesArray);
   };
 
@@ -114,13 +120,21 @@ function Index() {
     }
   };
 
-  const handleClickDropZone = (event: React.MouseEvent<HTMLDivElement>) => {
-    fileInputRef.current?.click();
-  };
-
   const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
+  };
+
+  const handleRestart = () => {
+    setCert(null);
+    setCertName('');
+    setPdfFiles([]);
+    setSigning(false);
+    setError(null);
+    setSuccess(false);
+    setProgress(0);
+    setProgressMessage('');
+    setShowProgress(false);
   };
 
   useEffect(() => {
@@ -140,10 +154,10 @@ function Index() {
   const PasswordComponent = useMemo(
     () => (
       <div className="input-group">
-        <label>Password</label>
+        <label>Senha</label>
         <input
           type="password"
-          placeholder="Enter certificate password"
+          placeholder="Digite a senha do certificado"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className={rememberPassword ? 'remembered' : ''}
@@ -154,7 +168,7 @@ function Index() {
             checked={rememberPassword}
             onChange={() => setRememberPassword(!rememberPassword)}
           />
-          Remember password
+          Lembrar senha
         </label>
       </div>
     ),
@@ -164,7 +178,7 @@ function Index() {
   const CertificateComponent = useMemo(
     () => (
       <div className="input-group">
-        <label>Certificate (.p12 or .pfx)</label>
+        <label>Certificado (.p12 or .pfx)</label>
         <input
           type="file"
           accept=".p12,.pfx"
@@ -175,26 +189,18 @@ function Index() {
         />
         {cert && (
           <div className="file-info">
-            Selected: <strong>{certName.substring(0, 35)}</strong>
+            Selecionado: <strong>{certName.substring(0, 35)}</strong>
           </div>
         )}
-        {/* <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={rememberCert}
-            onChange={() => setRememberCert(!rememberCert)}
-          />
-          Remember certificate
-        </label> */}
       </div>
     ),
-    [cert, rememberCert],
+    [cert],
   );
 
   const PDFsComponent = useMemo(
     () => (
       <div className="input-group">
-        <label>PDF Files</label>
+        <label>Arquivos PDF</label>
         <div
           className="drop-zone"
           onDrop={handleDrop}
@@ -218,12 +224,12 @@ function Index() {
             </ul>
           ) : (
             <div className="drop-zone-text">
-              Drag and drop PDF files or click{' '}
+              Arraste e solte arquivos PDF ou clique{' '}
               <span
-                onClick={handleClickDropZone}
+                onClick={() => fileInputRef.current?.click()}
                 className="underline cursor-pointer"
               >
-                here
+                aqui
               </span>
             </div>
           )}
@@ -258,8 +264,6 @@ function Index() {
         </div>
       )}
 
-      {showError && <div className="error-message">{error}</div>}
-
       {!signing && (
         <div className="form-container">
           {PasswordComponent}
@@ -269,10 +273,19 @@ function Index() {
           {PDFsComponent}
 
           <button className="sign-button" onClick={handleSign}>
-            Sign it all
+            Assinar
           </button>
         </div>
       )}
+
+      {success ||
+        (error && (
+          <div className="actions">
+            <button className="restart-button" onClick={handleRestart}>
+              Reiniciar
+            </button>
+          </div>
+        ))}
     </div>
   );
 }
