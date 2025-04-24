@@ -14,6 +14,10 @@ import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
 import { resolveHtmlPath } from './util';
+import { TempFileManager } from './TempFileManager';
+import fs from 'fs';
+import os from 'os';
+import { PDFSigner } from './PDFSigner';
 
 class AppUpdater {
   constructor() {
@@ -31,8 +35,60 @@ ipcMain.on('ipc-example', async (event, arg) => {
   event.reply('ipc-example', msgTemplate('pong'));
 });
 
-ipcMain.on('sign-pdfs', async (event, arg) => {
-  const { password } = arg;
+ipcMain.handle('sign-pdfs', async (event, { password, cert, pdfs }) => {
+  try {
+    const fileManager = new TempFileManager();
+    const signedOutputDir = path.join(
+      os.homedir(),
+      'Desktop',
+      `signed-pdfs-${Date.now()}`,
+    );
+
+    fileManager.savePDFs(pdfs);
+    fileManager.saveCert(cert);
+
+    const certPath = fileManager.getCertPath();
+    const pdfDir = fileManager.getPdfDir();
+
+    if (!fs.existsSync(signedOutputDir)) {
+      fs.mkdirSync(signedOutputDir);
+    }
+
+    for (const pdf of pdfs) {
+      const inputFilePath = path.join(pdfDir, pdf.name);
+      const outputFilePath = path.join(signedOutputDir, pdf.name);
+
+      const signer = new PDFSigner(certPath!, password);
+      await signer.sign(inputFilePath, outputFilePath);
+    }
+
+    return {
+      success: true,
+      message: 'Files signed successfully!',
+      outPutDir: signedOutputDir,
+    };
+  } catch (error) {}
+});
+
+ipcMain.handle('clean-pdfs-temp-dir', async () => {
+  const fileManager = new TempFileManager();
+  const pdfDir = fileManager.getPdfDir();
+
+  fileManager.clearDir(pdfDir);
+});
+
+ipcMain.handle('clean-cert-temp-dir', async () => {
+  const fileManager = new TempFileManager();
+  const certDir = fileManager.getCertDir();
+
+  fileManager.clearDir(certDir);
+});
+
+ipcMain.handle('clean-all-temp-dir', async () => {
+  const fileManager = new TempFileManager();
+
+  fileManager.clearDir(fileManager.getPdfDir());
+  fileManager.clearDir(fileManager.getCertDir());
 });
 
 if (process.env.NODE_ENV === 'production') {

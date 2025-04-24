@@ -1,8 +1,8 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
+
 import icon from '../../assets/logo.png';
 import './App.css';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import path from 'path';
 
 function Index() {
   const [rememberPassword, setRememberPassword] = useState(true);
@@ -39,6 +39,18 @@ function Index() {
     return null;
   };
 
+  const convertFileToBuffer = (file: File): Promise<Uint8Array> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const arrayBuffer = reader.result as ArrayBuffer;
+        resolve(new Uint8Array(arrayBuffer));
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
   const handleSign = async () => {
     const result = await handleInputsValidation();
 
@@ -52,18 +64,6 @@ function Index() {
       localStorage.setItem('password', password);
     }
 
-    if (rememberCert && cert) {
-      const certBlob = new Blob([cert], { type: cert.type });
-      const certFile = new File([certBlob], cert.name, { type: cert.type });
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64String = reader.result as string;
-        localStorage.setItem('cert', base64String);
-        localStorage.setItem('certName', cert.name);
-      };
-      reader.readAsDataURL(certFile);
-    }
-
     setSigning(true);
     setShowProgress(true);
     setProgress(0);
@@ -73,12 +73,29 @@ function Index() {
     setShowError(false);
     setSignedFiles([]);
 
-    console.log(cert, 'cert');
-    console.log(pdfFiles, 'pdfFiles');
+    if (!cert) return;
+    const certBuffer = await convertFileToBuffer(cert).then((buffer) => ({
+      name: certName,
+      buffer,
+    }));
 
-    window.electron.ipcRenderer.sendMessage('sign-pdfs', {
+    if (!pdfFiles || pdfFiles.length === 0) return;
+    const pdfBuffers = await Promise.all(
+      pdfFiles.map((file) =>
+        convertFileToBuffer(file).then((buffer) => ({
+          name: file.name,
+          buffer,
+        })),
+      ),
+    );
+
+    const response = await window.electron.ipcRenderer.invoke('sign-pdfs', {
       password,
+      cert: certBuffer,
+      pdfs: pdfBuffers,
     });
+
+    console.log('Response from main process:', response);
   };
 
   const handleFilesDrop = (files: FileList | File[]) => {
@@ -108,27 +125,11 @@ function Index() {
 
   useEffect(() => {
     const savedPassword = localStorage.getItem('password');
-    const savedCert = localStorage.getItem('cert');
-    const savedCertName = localStorage.getItem('certName');
 
     if (savedPassword) {
       setPassword(savedPassword);
-      setRememberPassword(true);
     }
-
-    if (savedCert) {
-      setCert(new File([], savedCert));
-      setCertName(savedCertName || '');
-      setRememberCert(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!rememberCert) {
-      localStorage.removeItem('cert');
-      localStorage.removeItem('certName');
-    }
-  }, [rememberCert]);
+  }, [rememberPassword]);
 
   useEffect(() => {
     if (!rememberPassword) {
@@ -177,14 +178,14 @@ function Index() {
             Selected: <strong>{certName.substring(0, 35)}</strong>
           </div>
         )}
-        <label className="checkbox">
+        {/* <label className="checkbox">
           <input
             type="checkbox"
             checked={rememberCert}
             onChange={() => setRememberCert(!rememberCert)}
           />
           Remember certificate
-        </label>
+        </label> */}
       </div>
     ),
     [cert, rememberCert],
