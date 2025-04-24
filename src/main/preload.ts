@@ -2,7 +2,7 @@
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-export type Channels = 'sign-pdfs' | 'open-signed-dir-files';
+export type Channels = 'sign-pdfs' | 'open-signed-dir-files' | 'sign-progress' | 'sign-complete';
 
 const electronHandler = {
   ipcRenderer: {
@@ -22,7 +22,7 @@ const electronHandler = {
       ipcRenderer.once(channel, (_event, ...args) => func(...args));
     },
     invoke(channel: Channels, ...args: unknown[]) {
-      return ipcRenderer.invoke(channel, ...args);
+      ipcRenderer.send(channel, ...args);
     },
   },
   api: {

@@ -208,9 +208,29 @@ body {
   cursor: pointer;
 }
 
+.progress {
+  width: 100%;
+  max-width: 500px;
+  margin: 2rem auto;
+  padding: 1rem;
+  background-color: #f7f7f7;
+  border-radius: 12px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  text-align: center;
+}
+.progress-bar {
+  height: 20px;
+  width: 0;
+  background: linear-gradient(90deg, #4caf50, #81c784);
+  border-radius: 10px;
+  transition: width 0.3s ease-in-out;
+}
+
 .progress-message {
-  margin-top: 0.5rem;
-  font-size: 14px;
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+  color: #333;
+  font-weight: 500;
 }
 
 .hidden {

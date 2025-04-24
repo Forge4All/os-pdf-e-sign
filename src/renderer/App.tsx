@@ -8,6 +8,7 @@ function Index() {
   const [password, setPassword] = useState('');
   const [certName, setCertName] = useState('');
   const [rememberPassword, setRememberPassword] = useState(true);
+  const [outputDir, setOutputDir] = useState('');
 
   const [cert, setCert] = useState<File | null>(null);
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
@@ -16,8 +17,7 @@ function Index() {
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState('');
 
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [showRestartButton, setShowRestartButton] = useState(false);
 
   const [showProgress, setShowProgress] = useState(false);
 
@@ -66,9 +66,7 @@ function Index() {
     setSigning(true);
     setShowProgress(true);
     setProgress(0);
-    setProgressMessage('Signing files...');
-    setError(null);
-    setSuccess(false);
+    setProgressMessage('Assinando arquivos...');
 
     if (!cert) return;
     const certBuffer = await convertFileToBuffer(cert).then((buffer) => ({
@@ -86,22 +84,34 @@ function Index() {
       ),
     );
 
-    const response = await window.electron.ipcRenderer.invoke('sign-pdfs', {
+    window.electron.ipcRenderer.sendMessage('sign-pdfs', {
       password,
       cert: certBuffer,
       pdfs: pdfBuffers,
     });
-
-    if (response.success) {
-      setProgress(100);
-      setProgressMessage('Files signed successfully!');
-      setSuccess(true);
-
-      window.electron.api.openSignedDirFiles(response.outPutDir);
-    }
-
-    console.log('Response from main process:', response);
   };
+
+  window.electron.ipcRenderer.on('sign-progress', (args) => {
+    if (!args) return;
+    const { progress, message } = JSON.parse(args as string);
+
+    setProgress(progress);
+    setProgressMessage(message);
+  });
+
+  window.electron.ipcRenderer.on('sign-complete', (args: any) => {
+    const parsedArgs = JSON.parse(args as string);
+
+    if (parsedArgs.success) {
+      setProgress(100);
+      setProgressMessage('Arquivos assinados com sucesso!');
+      setOutputDir(parsedArgs.outputDir);
+    } else {
+      setProgress(0);
+      setProgressMessage('Erro ao assinar arquivos.');
+      setShowRestartButton(true);
+    }
+  });
 
   const handleFilesDrop = (files: FileList | File[]) => {
     const pdfFilesArray = Array.from(files).filter(
@@ -130,12 +140,24 @@ function Index() {
     setCertName('');
     setPdfFiles([]);
     setSigning(false);
-    setError(null);
-    setSuccess(false);
+    setShowProgress(false);
+    setShowRestartButton(false);
     setProgress(0);
     setProgressMessage('');
     setShowProgress(false);
   };
+
+  useEffect(() => {
+    if (outputDir !== '') {
+      setProgressMessage('Abrindo pasta com arquivos assinados...');
+
+      setTimeout(() => {
+        window.electron.api.openSignedDirFiles(outputDir);
+        setProgressMessage('Diretório aberto com sucesso!');
+        setShowRestartButton(true);
+      }, 1000);
+    }
+  }, [outputDir]);
 
   useEffect(() => {
     const savedPassword = localStorage.getItem('password');
@@ -278,14 +300,13 @@ function Index() {
         </div>
       )}
 
-      {success ||
-        (error && (
-          <div className="actions">
-            <button className="restart-button" onClick={handleRestart}>
-              Reiniciar
-            </button>
-          </div>
-        ))}
+      {showRestartButton && (
+        <div className="actions">
+          <button className="restart-button" onClick={handleRestart}>
+            Reiniciar
+          </button>
+        </div>
+      )}
     </div>
   );
 }

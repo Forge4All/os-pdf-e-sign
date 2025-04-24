@@ -134,7 +134,7 @@ app
   })
   .catch(console.log);
 
-ipcMain.handle('sign-pdfs', async (event, { password, cert, pdfs }) => {
+ipcMain.on('sign-pdfs', async (event, { password, cert, pdfs }) => {
   try {
     const fileManager = new TempFileManager();
     const signedOutputDir = path.join(
@@ -153,26 +153,43 @@ ipcMain.handle('sign-pdfs', async (event, { password, cert, pdfs }) => {
       fs.mkdirSync(signedOutputDir);
     }
 
-    for (const pdf of pdfs) {
+    const total = pdfs.length;
+
+    for (let i = 0; i < total; i++) {
+      const pdf = pdfs[i];
       const inputFilePath = path.join(pdfDir, pdf.name);
       const outputFilePath = path.join(signedOutputDir, pdf.name);
 
       const signer = new PDFSigner(certPath!, password);
       await signer.sign(inputFilePath, outputFilePath);
+
+      const progress = Math.round(((i + 1) / total) * 100);
+      const message = `Assinado ${i + 1} de ${total} PDFs`;
+
+      const sendMessage = (progress: number, message: string) =>
+        JSON.stringify({ progress, message });
+
+      event.reply('sign-progress', sendMessage(progress, message));
     }
 
-    return {
-      success: true,
-      message: 'Files signed successfully!',
-      outPutDir: signedOutputDir,
-    };
+    const sendMessage = (
+      success: boolean,
+      message: string,
+      outputDir: string,
+    ) => JSON.stringify({ success, message, outputDir });
+
+    event.reply(
+      'sign-complete',
+      sendMessage(true, 'Assinatura concluída', signedOutputDir),
+    );
   } catch (error: any) {
     console.error('Error signing PDFs:', error);
-    return {
+
+    event.sender.send('sign-complete', {
       success: false,
       message: 'Error signing PDFs',
       error: error.message,
-    };
+    });
   }
 });
 
