@@ -137,9 +137,16 @@ app
 ipcMain.on('sign-pdfs', async (event, { password, cert, pdfs }) => {
   try {
     const fileManager = new TempFileManager();
+    let desktopDir = path.join(os.homedir(), 'Desktop');
+    if (!fs.existsSync(desktopDir)) {
+      desktopDir = path.join(os.homedir(), 'Área de Trabalho');
+      if (!fs.existsSync(desktopDir)) {
+        desktopDir = os.homedir();
+      }
+    }
     const signedOutputDir = path.join(
       os.homedir(),
-      'Desktop',
+      desktopDir,
       `signed-pdfs-${Date.now()}`,
     );
 
