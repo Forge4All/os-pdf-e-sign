@@ -134,7 +134,7 @@ app
   })
   .catch(console.log);
 
-ipcMain.on('sign-pdfs', async (event, { password, cert, pdfs }) => {
+ipcMain.on('sign-pdfs', async (event, { eSignText, password, cert, pdfs }) => {
   try {
     const fileManager = new TempFileManager();
     const signedOutputDir = path.join(
@@ -159,7 +159,7 @@ ipcMain.on('sign-pdfs', async (event, { password, cert, pdfs }) => {
       const inputFilePath = path.join(pdfDir, pdf.name);
       const outputFilePath = path.join(signedOutputDir, pdf.name);
 
-      const signer = new PDFSigner(certPath!, password);
+      const signer = new PDFSigner(eSignText, certPath!, password);
       await signer.sign(inputFilePath, outputFilePath);
 
       const progress = Math.round(((i + 1) / total) * 100);

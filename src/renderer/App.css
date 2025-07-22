@@ -106,7 +106,8 @@ body {
 }
 
 .input-group input[type="password"],
-.input-group input[type="file"] {
+.input-group input[type="file"],
+.input-group input[type="text"] {
   width: 100%;
   padding: 10px;
   border: 1px solid #ccc;
@@ -218,6 +219,7 @@ body {
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
   text-align: center;
 }
+
 .progress-bar {
   height: 20px;
   width: 0;

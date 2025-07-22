@@ -14,10 +14,12 @@ import signer from 'node-signpdf';
 const SIGNATURE_LENGTH = 5540;
 
 export class PDFSigner {
+  private eSignText: string;
   private certificatePath: string;
   private password: string;
 
-  constructor(certificatePath: string, password: string) {
+  constructor(eSignText: string, certificatePath: string, password: string) {
+    this.eSignText = eSignText;
     this.certificatePath = certificatePath;
     this.password = password;
   }
@@ -31,15 +33,13 @@ export class PDFSigner {
         ignoreEncryption: true,
       });
 
-      const signatureFieldName =
-        'Documento assinado digitalmente por INSTITUTO DO CANCER DE LONDRINA';
       const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
       const pages = pdfDoc.getPages();
       const firstPage = pages[0];
       const { height } = firstPage.getSize();
 
-      firstPage.drawText(signatureFieldName, {
+      firstPage.drawText(this.eSignText, {
         x: 1,
         y: height - 8,
         size: 8,
@@ -48,7 +48,6 @@ export class PDFSigner {
       });
 
       pdfDoc.save({ useObjectStreams: false });
-
 
       const ByteRange = PDFArray.withContext(pdfDoc.context);
       ByteRange.push(PDFNumber.of(0));

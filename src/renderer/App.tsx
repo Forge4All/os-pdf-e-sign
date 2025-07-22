@@ -5,9 +5,14 @@ import icon from '../../assets/logo.png';
 import './App.css';
 
 function Index() {
-  const [password, setPassword] = useState('');
+  const [eSignText, setESignText] = useState('');
+  const [rememberESignText, setRememberESignText] = useState(true);
+
   const [certName, setCertName] = useState('');
+
+  const [password, setPassword] = useState('');
   const [rememberPassword, setRememberPassword] = useState(true);
+
   const [outputDir, setOutputDir] = useState('');
 
   const [cert, setCert] = useState<File | null>(null);
@@ -24,6 +29,10 @@ function Index() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleInputsValidation = async () => {
+    if (!eSignText) {
+      return 'Assinatura/Texto é obrigatório.';
+    }
+
     if (!password) {
       return 'Senha do certificado é obrigatória.';
     }
@@ -59,6 +68,10 @@ function Index() {
       return;
     }
 
+    if (rememberESignText) {
+      localStorage.setItem('eSignText', eSignText);
+    }
+
     if (rememberPassword) {
       localStorage.setItem('password', password);
     }
@@ -85,6 +98,7 @@ function Index() {
     );
 
     window.electron.ipcRenderer.sendMessage('sign-pdfs', {
+      eSignText,
       password,
       cert: certBuffer,
       pdfs: pdfBuffers,
@@ -168,10 +182,41 @@ function Index() {
   }, [rememberPassword]);
 
   useEffect(() => {
+    const savedESignText = localStorage.getItem('eSignText');
+
+    if (savedESignText) {
+      setESignText(savedESignText);
+    }
+  }, [rememberESignText]);
+
+  useEffect(() => {
     if (!rememberPassword) {
       localStorage.removeItem('password');
     }
   }, [rememberPassword]);
+
+  const ESignTextComponent = useMemo(
+    () => (
+      <div className="input-group">
+        <label>Assinatura/Texto</label>
+        <input
+          type="text"
+          placeholder="Digite o texto da assinatura aqui"
+          value={eSignText}
+          onChange={(e) => setESignText(e.target.value)}
+        />
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={rememberESignText}
+            onChange={() => setRememberESignText(!rememberESignText)}
+          />
+          Lembrar assinatura
+        </label>
+      </div>
+    ),
+    [eSignText, rememberESignText],
+  );
 
   const PasswordComponent = useMemo(
     () => (
@@ -288,9 +333,11 @@ function Index() {
 
       {!signing && (
         <div className="form-container">
-          {PasswordComponent}
+          {ESignTextComponent}
 
           {CertificateComponent}
+
+          {PasswordComponent}
 
           {PDFsComponent}
 
