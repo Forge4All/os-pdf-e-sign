@@ -1,25 +1,33 @@
-## Install
+# os-pdf-e-sign
 
-```bash
-npm install
-```
+**os-pdf-e-sign** is a free, open-source desktop application for **bulk signing PDF documents**, built with Electron and React. It allows users to digitally sign multiple PDF files quickly and securely, supporting both **Windows** and **Linux**.
 
-## Starting Development
+Designed to be easy to use, scalable, and adaptable, the project welcomes community contributions for features, translations, documentation, and quality improvements.
 
-Start the app in the `dev` environment:
+## Features
 
-```bash
-npm start
-```
+- **Bulk PDF signing** with digital certificates
+- **Intuitive, cross-platform UI** (Electron/React)
+- Works on **Windows** and **Linux**
+- **Open source**: MIT License
 
-## Packaging for Production
+## Getting Started
 
-To package apps for the local platform:
+### 🖥️ Download & Install
 
-```bash
-npm run package
-```
+Head to the [Releases](https://github.com/Forge4All/os-pdf-e-sign/releases) page to download the latest installer for Windows or Linux.
 
-## License
+### 📖 Usage
 
-MIT © [Electron React Boilerplate](https://github.com/electron-react-boilerplate)
+1. **Launch** the application.
+2. **Select** the PDF files you want to sign.
+3. **Choose** your digital certificate.
+4. **Sign!** Your PDFs will be processed in bulk.
+
+## Building from Source
+
+### Requirements
+
+- Node.js (LTS)
+- npm or yarn
+- Git
