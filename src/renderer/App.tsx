@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
 
-import icon from '../../assets/logo.png';
 import './App.css';
 
 function Index() {
@@ -27,6 +26,28 @@ function Index() {
   const [showProgress, setShowProgress] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  window.electron.ipcRenderer.on('sign-progress', (args) => {
+    if (!args) return;
+    const { progress, message } = JSON.parse(args as string);
+
+    setProgress(progress);
+    setProgressMessage(message);
+  });
+
+  window.electron.ipcRenderer.on('sign-complete', (args: any) => {
+    const parsedArgs = JSON.parse(args as string);
+
+    if (parsedArgs.success) {
+      setProgress(100);
+      setProgressMessage('Arquivos assinados com sucesso!');
+      setOutputDir(parsedArgs.outputDir);
+    } else {
+      setProgress(0);
+      setProgressMessage('Erro ao assinar arquivos.');
+      setShowRestartButton(true);
+    }
+  });
 
   const handleInputsValidation = async () => {
     if (!eSignText) {
@@ -104,28 +125,6 @@ function Index() {
       pdfs: pdfBuffers,
     });
   };
-
-  window.electron.ipcRenderer.on('sign-progress', (args) => {
-    if (!args) return;
-    const { progress, message } = JSON.parse(args as string);
-
-    setProgress(progress);
-    setProgressMessage(message);
-  });
-
-  window.electron.ipcRenderer.on('sign-complete', (args: any) => {
-    const parsedArgs = JSON.parse(args as string);
-
-    if (parsedArgs.success) {
-      setProgress(100);
-      setProgressMessage('Arquivos assinados com sucesso!');
-      setOutputDir(parsedArgs.outputDir);
-    } else {
-      setProgress(0);
-      setProgressMessage('Erro ao assinar arquivos.');
-      setShowRestartButton(true);
-    }
-  });
 
   const handleFilesDrop = (files: FileList | File[]) => {
     const pdfFilesArray = Array.from(files).filter(
@@ -321,7 +320,7 @@ function Index() {
   return (
     <div className="app-container">
       <div className="logo">
-        <img width="200" alt="icon" src={icon} />
+        <h3>Forge4All</h3>
       </div>
 
       {showProgress && (

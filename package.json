@@ -1,6 +1,6 @@
 {
-  "name": "pdf-e-signer",
-  "description": "A foundation for scalable desktop apps - This application was build using Electron React Boilerplate.",
+  "name": "os-pdf-e-signer",
+  "description": "A PDF e-signing application built with Electron, React, and TypeScript. Developed by Forge4All.",
   "version": "0.0.1",
   "keywords": [
     "electron",
@@ -15,9 +15,9 @@
   ],
   "license": "MIT",
   "author": {
-    "name": "João Bianchi",
-    "email": "joaobianchi@live.com",
-    "url": "https://imbianchi.dev"
+    "name": "Forge4All",
+    "email": "contact@forge4all.org",
+    "url": "https://forge4all.org"
   },
   "main": "./.erb/dll/main.bundle.dev.js",
   "scripts": {

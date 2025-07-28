@@ -80,9 +80,10 @@ body {
 }
 
 .logo h3 {
-  font-size: 24px;
+  font-size: 2rem;
   color: #333;
   margin-top: 10px;
+  font-family: Verdana, Geneva, Tahoma, sans-serif;
 }
 
 .form-container {
