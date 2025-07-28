@@ -134,6 +134,10 @@ app
   })
   .catch(console.log);
 
+ipcMain.handle('language-change', (_, lang) => {
+  mainWindow?.webContents.send('language-change', lang);
+});
+
 ipcMain.on('sign-pdfs', async (event, { eSignText, password, cert, pdfs }) => {
   try {
     const fileManager = new TempFileManager();

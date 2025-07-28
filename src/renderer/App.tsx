@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import './App.css';
 
 function Index() {
+  const { t, i18n } = useTranslation();
+
   const [eSignText, setESignText] = useState('');
   const [rememberESignText, setRememberESignText] = useState(true);
 
@@ -40,11 +43,11 @@ function Index() {
 
     if (parsedArgs.success) {
       setProgress(100);
-      setProgressMessage('Arquivos assinados com sucesso!');
+      setProgressMessage(t('Signing completed successfully!'));
       setOutputDir(parsedArgs.outputDir);
     } else {
       setProgress(0);
-      setProgressMessage('Erro ao assinar arquivos.');
+      setProgressMessage(t('Error signing files.'));
       setShowRestartButton(true);
     }
   });
@@ -160,6 +163,118 @@ function Index() {
     setShowProgress(false);
   };
 
+  const ESignTextComponent = () => (
+    <div className="input-group">
+      <label>{t('Signature to show on the PDF')}:</label>
+      <input
+        type="text"
+        placeholder={t('Type here the certificate password')}
+        value={eSignText}
+        onChange={(e) => setESignText(e.target.value)}
+      />
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={rememberESignText}
+          onChange={() => setRememberESignText(!rememberESignText)}
+        />
+        {t('Remember signature text')}
+      </label>
+    </div>
+  );
+
+  const CertificateComponent = () => (
+    <div className="input-group">
+      <label>{t('Certificate (.p12 or .pfx)')}:</label>
+      <input
+        type="file"
+        accept=".p12,.pfx"
+        onChange={(e) => {
+          setCert(e.target.files?.[0] || null);
+          setCertName(e.target.files?.[0]?.name || '');
+        }}
+      />
+      {cert && (
+        <div className="file-info">
+          {t('Selected certificate:')}{' '}
+          <strong>{certName.substring(0, 35)}</strong>
+        </div>
+      )}
+    </div>
+  );
+
+  const PasswordComponent = () => (
+    <div className="input-group">
+      <label>{t('Password')}:</label>
+      <input
+        type="password"
+        placeholder={t('Type here the certificate password')}
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        className={rememberPassword ? 'remembered' : ''}
+      />
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={rememberPassword}
+          onChange={() => setRememberPassword(!rememberPassword)}
+        />
+        {t('Remember password')}
+      </label>
+    </div>
+  );
+
+  const PDFsComponent = () => (
+    <div className="input-group">
+      <label>{t('PDF files to sign')}:</label>
+      <div
+        className="drop-zone"
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+      >
+        {pdfFiles.length > 0 ? (
+          <ul className="file-list">
+            {pdfFiles.map((file, index) => (
+              <li key={index} className="file-item">
+                {file.name}
+                <span
+                  className="remove-pdf-button"
+                  onClick={() => {
+                    setPdfFiles((prev) => prev.filter((_, i) => i !== index));
+                  }}
+                >
+                  x
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="drop-zone-text">
+            {t('Drag and drop PDF files')} {t('or click')}{' '}
+            <span
+              onClick={() => fileInputRef.current?.click()}
+              className="underline cursor-pointer"
+            >
+              {t('here')}
+            </span>
+          </div>
+        )}
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files) {
+            handleFilesDrop(e.target.files);
+          }
+        }}
+      />
+    </div>
+  );
+
   useEffect(() => {
     if (outputDir !== '') {
       setProgressMessage('Abrindo pasta com arquivos assinados...');
@@ -194,128 +309,15 @@ function Index() {
     }
   }, [rememberPassword]);
 
-  const ESignTextComponent = useMemo(
-    () => (
-      <div className="input-group">
-        <label>Assinatura/Texto</label>
-        <input
-          type="text"
-          placeholder="Digite o texto da assinatura aqui"
-          value={eSignText}
-          onChange={(e) => setESignText(e.target.value)}
-        />
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={rememberESignText}
-            onChange={() => setRememberESignText(!rememberESignText)}
-          />
-          Lembrar assinatura
-        </label>
-      </div>
-    ),
-    [eSignText, rememberESignText],
-  );
+  useEffect(() => {
+    window.electron.api.onLanguageChange((lang: string) => {
+      i18n.changeLanguage(lang);
+    });
 
-  const PasswordComponent = useMemo(
-    () => (
-      <div className="input-group">
-        <label>Senha</label>
-        <input
-          type="password"
-          placeholder="Digite a senha do certificado"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className={rememberPassword ? 'remembered' : ''}
-        />
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={rememberPassword}
-            onChange={() => setRememberPassword(!rememberPassword)}
-          />
-          Lembrar senha
-        </label>
-      </div>
-    ),
-    [password, rememberPassword],
-  );
-
-  const CertificateComponent = useMemo(
-    () => (
-      <div className="input-group">
-        <label>Certificado (.p12 or .pfx)</label>
-        <input
-          type="file"
-          accept=".p12,.pfx"
-          onChange={(e) => {
-            setCert(e.target.files?.[0] || null);
-            setCertName(e.target.files?.[0]?.name || '');
-          }}
-        />
-        {cert && (
-          <div className="file-info">
-            Selecionado: <strong>{certName.substring(0, 35)}</strong>
-          </div>
-        )}
-      </div>
-    ),
-    [cert],
-  );
-
-  const PDFsComponent = useMemo(
-    () => (
-      <div className="input-group">
-        <label>Arquivos PDF</label>
-        <div
-          className="drop-zone"
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-        >
-          {pdfFiles.length > 0 ? (
-            <ul className="file-list">
-              {pdfFiles.map((file, index) => (
-                <li key={index} className="file-item">
-                  {file.name}
-                  <span
-                    className="remove-pdf-button"
-                    onClick={() => {
-                      setPdfFiles((prev) => prev.filter((_, i) => i !== index));
-                    }}
-                  >
-                    x
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="drop-zone-text">
-              Arraste e solte arquivos PDF ou clique{' '}
-              <span
-                onClick={() => fileInputRef.current?.click()}
-                className="underline cursor-pointer"
-              >
-                aqui
-              </span>
-            </div>
-          )}
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/pdf"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) {
-              handleFilesDrop(e.target.files);
-            }
-          }}
-        />
-      </div>
-    ),
-    [pdfFiles],
-  );
+    return () => {
+      window.electron.api.removeLanguageChangeListener();
+    };
+  }, []);
 
   return (
     <div className="app-container">
@@ -326,22 +328,22 @@ function Index() {
       {showProgress && (
         <div className="progress">
           <div className="progress-bar" style={{ width: `${progress}%` }} />
-          <div className="progress-message">{progressMessage}</div>
+          <div className="progress-message">{t(progressMessage)}</div>
         </div>
       )}
 
       {!signing && (
         <div className="form-container">
-          {ESignTextComponent}
+          {ESignTextComponent()}
 
-          {CertificateComponent}
+          {CertificateComponent()}
 
-          {PasswordComponent}
+          {PasswordComponent()}
 
-          {PDFsComponent}
+          {PDFsComponent()}
 
           <button className="sign-button" onClick={handleSign}>
-            Assinar
+            {t('Sign PDFs')}
           </button>
         </div>
       )}
@@ -349,7 +351,7 @@ function Index() {
       {showRestartButton && (
         <div className="actions">
           <button className="restart-button" onClick={handleRestart}>
-            Reiniciar
+            {t('Restart')}
           </button>
         </div>
       )}

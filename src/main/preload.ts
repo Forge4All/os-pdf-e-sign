@@ -2,7 +2,12 @@
 /* eslint no-unused-vars: off */
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
-export type Channels = 'sign-pdfs' | 'open-signed-dir-files' | 'sign-progress' | 'sign-complete';
+export type Channels =
+  | 'sign-pdfs'
+  | 'open-signed-dir-files'
+  | 'sign-progress'
+  | 'sign-complete'
+  | 'language-change';
 
 const electronHandler = {
   ipcRenderer: {
@@ -28,6 +33,14 @@ const electronHandler = {
   api: {
     openSignedDirFiles: (dirPath: string) => {
       ipcRenderer.invoke('open-signed-dir-files', dirPath);
+    },
+    onLanguageChange: (callback: (lang: string) => void) => {
+      ipcRenderer.on('language-change', (_event, lang) => {
+        callback(lang);
+      });
+    },
+    removeLanguageChangeListener: () => {
+      ipcRenderer.removeAllListeners('language-change');
     },
   },
 };

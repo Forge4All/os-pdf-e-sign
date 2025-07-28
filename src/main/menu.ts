@@ -5,6 +5,7 @@ import {
   BrowserWindow,
   MenuItemConstructorOptions,
 } from 'electron';
+import i18n from '../i18n';
 
 interface DarwinMenuItemConstructorOptions extends MenuItemConstructorOptions {
   selector?: string;
@@ -53,53 +54,6 @@ export default class MenuBuilder {
   }
 
   buildDarwinTemplate(): MenuItemConstructorOptions[] {
-    const subMenuAbout: DarwinMenuItemConstructorOptions = {
-      label: 'Electron',
-      submenu: [
-        {
-          label: 'About ElectronReact',
-          selector: 'orderFrontStandardAboutPanel:',
-        },
-        { type: 'separator' },
-        { label: 'Services', submenu: [] },
-        { type: 'separator' },
-        {
-          label: 'Hide ElectronReact',
-          accelerator: 'Command+H',
-          selector: 'hide:',
-        },
-        {
-          label: 'Hide Others',
-          accelerator: 'Command+Shift+H',
-          selector: 'hideOtherApplications:',
-        },
-        { label: 'Show All', selector: 'unhideAllApplications:' },
-        { type: 'separator' },
-        {
-          label: 'Quit',
-          accelerator: 'Command+Q',
-          click: () => {
-            app.quit();
-          },
-        },
-      ],
-    };
-    const subMenuEdit: DarwinMenuItemConstructorOptions = {
-      label: 'Edit',
-      submenu: [
-        { label: 'Undo', accelerator: 'Command+Z', selector: 'undo:' },
-        { label: 'Redo', accelerator: 'Shift+Command+Z', selector: 'redo:' },
-        { type: 'separator' },
-        { label: 'Cut', accelerator: 'Command+X', selector: 'cut:' },
-        { label: 'Copy', accelerator: 'Command+C', selector: 'copy:' },
-        { label: 'Paste', accelerator: 'Command+V', selector: 'paste:' },
-        {
-          label: 'Select All',
-          accelerator: 'Command+A',
-          selector: 'selectAll:',
-        },
-      ],
-    };
     const subMenuViewDev: MenuItemConstructorOptions = {
       label: 'View',
       submenu: [
@@ -189,7 +143,7 @@ export default class MenuBuilder {
         ? subMenuViewDev
         : subMenuViewProd;
 
-    return [subMenuAbout, subMenuEdit, subMenuView, subMenuWindow, subMenuHelp];
+    return [subMenuView, subMenuWindow, subMenuHelp];
   }
 
   buildDefaultTemplate() {
@@ -252,8 +206,84 @@ export default class MenuBuilder {
                 },
               ],
       },
+      {
+        label: '&Language',
+        submenu: [
+          {
+            label: 'English',
+            click: () =>
+              this.mainWindow.webContents.send('language-change', 'en'),
+          },
+          {
+            label: 'Português (Brasil)',
+            click: () =>
+              this.mainWindow.webContents.send('language-change', 'pt-BR'),
+          },
+          {
+            label: 'Deutsch',
+            click: () =>
+              this.mainWindow.webContents.send('language-change', 'de'),
+          },
+          {
+            label: 'Español',
+            click: () =>
+              this.mainWindow.webContents.send('language-change', 'es'),
+          },
+          {
+            label: 'Français',
+            click: () =>
+              this.mainWindow.webContents.send('language-change', 'fr'),
+          },
+        ],
+      },
+      {
+        label: '&Help',
+        submenu: [
+          {
+            label: 'Documentation',
+            click() {
+              shell.openExternal('https://forge4all.org/os-pdf-e-sign');
+            },
+          },
+        ],
+      },
+      {
+        label: 'Quit',
+        accelerator: 'Command+Q',
+        click: () => {
+          app.quit();
+        },
+      },
     ];
 
-    return templateDefault;
+    const subMenuWindow: MenuItemConstructorOptions = {
+      label: 'Window',
+      submenu: [
+        {
+          label: 'Minimize',
+          accelerator: 'Ctrl+M',
+          click: () => {
+            this.mainWindow.minimize();
+          },
+        },
+        {
+          label: 'Close',
+          accelerator: 'Ctrl+W',
+          click: () => {
+            this.mainWindow.close();
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Bring All to Front',
+          click: () => {
+            this.mainWindow.show();
+            this.mainWindow.focus();
+          },
+        },
+      ],
+    };
+
+    return [...templateDefault, subMenuWindow];
   }
 }
