@@ -1,0 +1,92 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      linux_artifact: ${{ steps.upload-artifact.outputs.appimage-path }}
+      windows_artifact: ${{ steps.upload-artifact-windows.outputs.win-installer-path }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Linux AppImage
+        run: npm run build && npx electron-builder --linux AppImage --publish never
+        id: build-linux
+
+      - name: Upload Linux AppImage artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-appimage
+          path: dist/*.AppImage
+        id: upload-artifact
+
+  build-windows:
+    runs-on: windows-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Windows NSIS installer
+        run: npm run build && npx electron-builder --win nsis --publish never
+        id: build-windows
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-installer
+          path: dist/*.exe
+        id: upload-artifact-windows
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build, build-windows]
+
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: linux-appimage
+          path: ./artifacts/linux
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: windows-installer
+          path: ./artifacts/windows
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          artifacts: |
+            artifacts/linux/*.AppImage
+            artifacts/windows/*.exe
+          publish: true
