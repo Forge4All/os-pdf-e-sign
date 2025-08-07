@@ -46,6 +46,9 @@ const configuration: webpack.Configuration = {
     modules: [webpackPaths.srcPath, 'node_modules'],
     // There is no need to add aliases here, the paths in tsconfig get mirrored
     plugins: [new TsconfigPathsPlugins()],
+    alias: {
+      '@aws-sdk/client-s3': false,
+    },
   },
 
   plugins: [new webpack.EnvironmentPlugin({ NODE_ENV: 'production' })],

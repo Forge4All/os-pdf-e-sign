@@ -9,12 +9,12 @@ type FilePayload = {
 
 export class TempFileManager {
   private baseDir: string;
-  private pdfDir: string;
+  private pdfsDir: string;
   private certDir: string;
 
   constructor() {
-    this.baseDir = path.join(os.tmpdir(), 'pdf-signer');
-    this.pdfDir = path.join(this.baseDir, 'pdfs');
+    this.baseDir = path.join(os.tmpdir(), 'os-pdf-signer');
+    this.pdfsDir = path.join(this.baseDir, 'pdfs');
     this.certDir = path.join(this.baseDir, 'certs');
 
     this.setupDirectories();
@@ -22,9 +22,9 @@ export class TempFileManager {
 
   private setupDirectories() {
     this.ensureDir(this.baseDir);
-    this.ensureDir(this.pdfDir);
+    this.ensureDir(this.pdfsDir);
     this.ensureDir(this.certDir);
-    this.clearDir(this.pdfDir);
+    this.clearDir(this.pdfsDir);
     this.clearDir(this.certDir);
   }
 
@@ -37,21 +37,23 @@ export class TempFileManager {
   public clearDir(dirPath: string) {
     if (!fs.existsSync(dirPath)) return;
 
-    for (const file of fs.readdirSync(dirPath)) {
-      fs.unlinkSync(path.join(dirPath, file));
-    }
+    fs.rmSync(dirPath, { recursive: true, force: true });
+    fs.mkdirSync(dirPath, { recursive: true });
   }
 
   public savePDFs(files: FilePayload[]) {
-    files.forEach((file) => {
-      const target = path.join(this.pdfDir, file.name);
+    files.forEach((file, i) => {
+      const target = path.join(this.pdfsDir, file.name);
       fs.writeFileSync(target, file.buffer);
     });
   }
 
-  public saveCert(cert: { name: string; buffer: Buffer | ArrayBuffer | string }) {
+  public saveCert(cert: {
+    name: string;
+    buffer: Buffer | ArrayBuffer | string;
+  }) {
     const certDir = this.getCertDir();
-    if(!fs.existsSync(certDir)) {
+    if (!fs.existsSync(certDir)) {
       fs.mkdirSync(certDir, { recursive: true });
     }
 
@@ -59,8 +61,8 @@ export class TempFileManager {
 
     let certBuffer: Buffer;
 
-    if(typeof cert.buffer === 'string') {
-      if(cert.buffer.startsWith('data:')) {
+    if (typeof cert.buffer === 'string') {
+      if (cert.buffer.startsWith('data:')) {
         const base64 = cert.buffer.split(',')[1];
         certBuffer = Buffer.from(base64, 'base64');
       } else {
@@ -76,7 +78,7 @@ export class TempFileManager {
   }
 
   public getPdfDir() {
-    return this.pdfDir;
+    return this.pdfsDir;
   }
 
   public getCertDir() {
@@ -90,8 +92,14 @@ export class TempFileManager {
     return path.join(this.certDir, files[0]);
   }
 
+  public deleteZipFile(zipFilePath: string) {
+    if (fs.existsSync(zipFilePath)) {
+      fs.rmSync(zipFilePath, { force: true });
+    }
+  }
+
   public cleanup() {
-    this.clearDir(this.pdfDir);
+    this.clearDir(this.pdfsDir);
     this.clearDir(this.certDir);
   }
 }

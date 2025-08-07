@@ -18,7 +18,7 @@ function Index() {
   const [outputDir, setOutputDir] = useState('');
 
   const [cert, setCert] = useState<File | null>(null);
-  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
+  const [filesToSign, setFilesToSign] = useState<File[]>([]);
 
   const [signing, setSigning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -54,19 +54,19 @@ function Index() {
 
   const handleInputsValidation = async () => {
     if (!eSignText) {
-      return 'Assinatura/Texto é obrigatório.';
+      return 'Signature text is required.';
     }
 
     if (!password) {
-      return 'Senha do certificado é obrigatória.';
+      return 'Certificate password is required.';
     }
 
     if (!cert) {
-      return 'Certificado é obrigatório.';
+      return 'Certificate is required.';
     }
 
-    if (pdfFiles.length === 0) {
-      return 'Arquivos PDF são obrigatórios.';
+    if (filesToSign.length === 0) {
+      return 'At least one PDF file or a ZIP file is required.';
     }
 
     return null;
@@ -103,7 +103,7 @@ function Index() {
     setSigning(true);
     setShowProgress(true);
     setProgress(0);
-    setProgressMessage('Assinando arquivos...');
+    setProgressMessage('Signing PDFs...');
 
     if (!cert) return;
     const certBuffer = await convertFileToBuffer(cert).then((buffer) => ({
@@ -111,30 +111,48 @@ function Index() {
       buffer,
     }));
 
-    if (!pdfFiles || pdfFiles.length === 0) return;
-    const pdfBuffers = await Promise.all(
-      pdfFiles.map((file) =>
-        convertFileToBuffer(file).then((buffer) => ({
-          name: file.name,
-          buffer,
-        })),
-      ),
-    );
+    const filesToSignBuffered = [];
+    if (filesToSign.length > 0) {
+      filesToSignBuffered.push(
+        ...(await Promise.all(
+          filesToSign.map(async (file) => ({
+            name: file.name,
+            buffer: await convertFileToBuffer(file),
+          })),
+        )),
+      );
+    }
 
     window.electron.ipcRenderer.sendMessage('sign-pdfs', {
       eSignText,
       password,
       cert: certBuffer,
-      pdfs: pdfBuffers,
+      files: filesToSignBuffered,
     });
   };
 
   const handleFilesDrop = (files: FileList | File[]) => {
-    const pdfFilesArray = Array.from(files).filter(
+    const fileArray = Array.from(files);
+
+    if (fileArray.length === 0) return;
+    const pdfFiles = fileArray.filter(
       (file) => file.type === 'application/pdf',
     );
+    const zipFiles = fileArray.filter(
+      (file) => file.type === 'application/zip',
+    );
 
-    setPdfFiles(pdfFilesArray);
+    if (pdfFiles.length > 0) {
+      setFilesToSign((prev) => [...prev, ...pdfFiles]);
+    }
+
+    if (zipFiles.length > 0) {
+      if (zipFiles.length > 1) {
+        alert('Only one ZIP file can be selected at a time.');
+        return;
+      }
+      setFilesToSign((prev) => [...prev, ...zipFiles]);
+    }
   };
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
@@ -154,7 +172,7 @@ function Index() {
   const handleRestart = () => {
     setCert(null);
     setCertName('');
-    setPdfFiles([]);
+    setFilesToSign([]);
     setSigning(false);
     setShowProgress(false);
     setShowRestartButton(false);
@@ -232,21 +250,24 @@ function Index() {
         onDrop={handleDrop}
         onDragOver={handleDragOver}
       >
-        {pdfFiles.length > 0 ? (
+        {filesToSign.length > 0 ? (
           <ul className="file-list">
-            {pdfFiles.map((file, index) => (
-              <li key={index} className="file-item">
-                {file.name}
-                <span
-                  className="remove-pdf-button"
-                  onClick={() => {
-                    setPdfFiles((prev) => prev.filter((_, i) => i !== index));
-                  }}
-                >
-                  x
-                </span>
-              </li>
-            ))}
+            {filesToSign.length > 0 &&
+              filesToSign.map((file, index) => (
+                <li key={index} className="file-item">
+                  {file.name}
+                  <span
+                    className="remove-pdf-button"
+                    onClick={() => {
+                      setFilesToSign((prev) =>
+                        prev.filter((_, i) => i !== index),
+                      );
+                    }}
+                  >
+                    x
+                  </span>
+                </li>
+              ))}
           </ul>
         ) : (
           <div className="drop-zone-text">
@@ -263,7 +284,7 @@ function Index() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="application/pdf"
+        accept="application/pdf, .zip"
         multiple
         className="hidden"
         onChange={(e) => {
@@ -277,7 +298,7 @@ function Index() {
 
   useEffect(() => {
     if (outputDir !== '') {
-      setProgressMessage('Abrindo pasta com arquivos assinados...');
+      setProgressMessage('Opening signed files directory...');
 
       setTimeout(() => {
         window.electron.api.openSignedDirFiles(outputDir);

@@ -9,7 +9,7 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain } from 'electron';
+import { app, BrowserWindow, shell, ipcMain, IpcMainEvent } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
@@ -18,6 +18,7 @@ import { TempFileManager } from './TempFileManager';
 import fs from 'fs';
 import os from 'os';
 import { PDFSigner } from './PDFSigner';
+const unzip = require('unzipper');
 
 class AppUpdater {
   constructor() {
@@ -138,41 +139,185 @@ ipcMain.handle('language-change', (_, lang) => {
   mainWindow?.webContents.send('language-change', lang);
 });
 
-ipcMain.on('sign-pdfs', async (event, { eSignText, password, cert, pdfs }) => {
+async function* walkPdfFiles(dir: string): AsyncGenerator<string> {
+  const dirents = await fs.promises.readdir(dir, { withFileTypes: true });
+  for (const dirent of dirents) {
+    const res = path.resolve(dir, dirent.name);
+    if (dirent.isDirectory()) {
+      yield* walkPdfFiles(res);
+    } else if (
+      dirent.isFile() &&
+      path.extname(dirent.name).toLowerCase() === '.pdf'
+    ) {
+      yield res;
+    }
+  }
+}
+
+async function processPdfChunks(
+  pdfGenerator: AsyncGenerator<string>,
+  extractDir: string,
+  signedOutputDir: string,
+  signer: PDFSigner,
+  event: IpcMainEvent,
+  totalPdfCount: number,
+  processedCountStart: number = 0,
+  batchSize: number = 20,
+) {
+  let chunk: string[] = [];
+  let processedCount = processedCountStart;
+
+  for await (const pdfPath of pdfGenerator) {
+    chunk.push(pdfPath);
+    if (chunk.length >= batchSize) {
+      await signAndCleanupBatch(
+        chunk,
+        extractDir,
+        signedOutputDir,
+        signer,
+        event,
+        processedCount,
+        totalPdfCount,
+      );
+      processedCount += chunk.length;
+      chunk = [];
+    }
+  }
+
+  if (chunk.length > 0) {
+    await signAndCleanupBatch(
+      chunk,
+      extractDir,
+      signedOutputDir,
+      signer,
+      event,
+      processedCount,
+      totalPdfCount,
+    );
+  }
+}
+
+async function signAndCleanupBatch(
+  pdfPaths: string[],
+  extractDir: string,
+  signedOutputDir: string,
+  signer: PDFSigner,
+  event: IpcMainEvent,
+  processedCount: number,
+  totalPdfCount: number,
+) {
+  for (let i = 0; i < pdfPaths.length; i++) {
+    const pdfPath = pdfPaths[i];
+    const relativePath = path.relative(extractDir, pdfPath);
+    const outputPath = path.join(signedOutputDir, relativePath);
+
+    await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
+
+    await signer.sign(pdfPath, outputPath);
+
+    await fs.promises.unlink(pdfPath);
+
+    const totalProcessed = processedCount + i + 1;
+    const progress = Math.round((totalProcessed / totalPdfCount) * 100);
+    const message = `Signed ${totalProcessed} of ${totalPdfCount} PDFs in zip file.`;
+    event.reply('sign-progress', JSON.stringify({ progress, message }));
+  }
+}
+
+ipcMain.on('sign-pdfs', async (event, { eSignText, password, cert, files }) => {
   try {
-    const fileManager = new TempFileManager();
+    const tempFileManager = new TempFileManager();
+
     const signedOutputDir = path.join(
       os.homedir(),
       `signed-pdfs-${Date.now()}`,
     );
 
-    fileManager.savePDFs(pdfs);
-    fileManager.saveCert(cert);
+    tempFileManager.saveCert(cert);
 
-    const certPath = fileManager.getCertPath();
-    const pdfDir = fileManager.getPdfDir();
+    const pdfFiles = files.filter(
+      (file: File) => path.extname(file.name).toLowerCase() === '.pdf',
+    );
+    const zipFile = files.find(
+      (file: File) => path.extname(file.name).toLowerCase() === '.zip',
+    );
+
+    const certPath = tempFileManager.getCertPath();
+    const pdfDir = tempFileManager.getPdfDir();
 
     if (!fs.existsSync(signedOutputDir)) {
       fs.mkdirSync(signedOutputDir);
     }
 
-    const total = pdfs.length;
-
-    for (let i = 0; i < total; i++) {
-      const pdf = pdfs[i];
-      const inputFilePath = path.join(pdfDir, pdf.name);
-      const outputFilePath = path.join(signedOutputDir, pdf.name);
+    if (pdfFiles.length > 0) {
+      tempFileManager.savePDFs(pdfFiles);
 
       const signer = new PDFSigner(eSignText, certPath!, password);
-      await signer.sign(inputFilePath, outputFilePath);
+      for (let i = 0; i < pdfFiles.length; i++) {
+        const pdf = pdfFiles[i];
+        const inputFilePath = path.join(pdfDir, pdf.name);
+        const outputFilePath = path.join(signedOutputDir, pdf.name);
 
-      const progress = Math.round(((i + 1) / total) * 100);
-      const message = `Assinado ${i + 1} de ${total} PDFs`;
+        await signer.sign(inputFilePath, outputFilePath);
 
-      const sendMessage = (progress: number, message: string) =>
-        JSON.stringify({ progress, message });
+        const progress = Math.round(((i + 1) / pdfFiles.length) * 100);
+        const message = `Signed ${i + 1} of ${pdfFiles.length} PDFs.`;
+        event.reply('sign-progress', JSON.stringify({ progress, message }));
+      }
+    }
 
-      event.reply('sign-progress', sendMessage(progress, message));
+    if (zipFile) {
+      let message = `Processing ZIP file: ${zipFile.name}`;
+      event.reply('sign-progress', JSON.stringify({ progress: 0, message }));
+
+      const zipFilePath = path.join(pdfDir, zipFile.name);
+      fs.writeFileSync(zipFilePath, zipFile.buffer);
+
+      const extractDir = path.join(pdfDir, path.parse(zipFile.name).name);
+      if (!fs.existsSync(extractDir)) {
+        fs.mkdirSync(extractDir, { recursive: true });
+      }
+
+      await new Promise((resolve, reject) => {
+        fs.createReadStream(zipFilePath)
+          .pipe(unzip.Extract({ path: extractDir }))
+          .on('close', resolve)
+          .on('error', reject);
+      });
+
+      fs.unlinkSync(zipFilePath);
+
+      async function countPdfs(dir: string): Promise<number> {
+        let count = 0;
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            count += await countPdfs(fullPath);
+          } else if (
+            entry.isFile() &&
+            path.extname(entry.name).toLowerCase() === '.pdf'
+          ) {
+            count++;
+          }
+        }
+        return count;
+      }
+
+      const totalZippedPdfs = await countPdfs(extractDir);
+
+      const signer = new PDFSigner(eSignText, certPath!, password);
+      const pdfGenerator = walkPdfFiles(extractDir);
+
+      // Process zipped PDFs chunked with deletion after signing
+      await processPdfChunks(
+        pdfGenerator,
+        extractDir,
+        signedOutputDir,
+        signer,
+        event,
+        totalZippedPdfs,
+      );
     }
 
     const sendMessage = (
@@ -183,8 +328,10 @@ ipcMain.on('sign-pdfs', async (event, { eSignText, password, cert, pdfs }) => {
 
     event.reply(
       'sign-complete',
-      sendMessage(true, 'Assinatura concluída', signedOutputDir),
+      sendMessage(true, 'PDFs signed successfully!', signedOutputDir),
     );
+
+    tempFileManager.cleanup();
   } catch (error: any) {
     console.error('Error signing PDFs:', error);
 

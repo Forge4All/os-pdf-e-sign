@@ -61,7 +61,7 @@ export class PDFSigner {
         SubFilter: 'adbe.pkcs7.detached',
         ByteRange,
         Contents: PDFHexString.of('A'.repeat(SIGNATURE_LENGTH)),
-        Reason: PDFString.of('Assinatura digital'),
+        Reason: PDFString.of('Signed by os-pdf-signer'),
         M: PDFString.fromDate(new Date()),
       });
       const signatureDictref = pdfDoc.context.register(signatureDict);
@@ -72,7 +72,7 @@ export class PDFSigner {
         FT: 'Sig',
         Rect: [0, 0, 0, 0],
         V: signatureDictref,
-        T: PDFString.of('Assinatura digital'),
+        T: PDFString.of('Signature'),
         F: 4,
         P: firstPage.ref,
       });
