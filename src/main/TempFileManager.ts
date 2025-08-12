@@ -1,11 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-
-type FilePayload = {
-  name: string;
-  buffer: Uint8Array;
-};
+import { FilePayload } from './main';
 
 export class TempFileManager {
   private baseDir: string;
@@ -44,7 +40,7 @@ export class TempFileManager {
   public savePDFs(files: FilePayload[]) {
     files.forEach((file, i) => {
       const target = path.join(this.pdfsDir, file.name);
-      fs.writeFileSync(target, file.buffer);
+      fs.writeFileSync(target, file.buffer as Buffer);
     });
   }
 

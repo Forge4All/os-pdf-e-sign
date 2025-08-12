@@ -139,6 +139,16 @@ ipcMain.handle('language-change', (_, lang) => {
   mainWindow?.webContents.send('language-change', lang);
 });
 
+/**
+ * ############### PDF Signing Logic ###############
+ * This section handles the signing of PDF files, both standalone and within ZIP archives.
+ * It includes functions to walk through directories, process PDF files in batches,
+ * and sign them using a provided certificate and password.
+ * It also manages temporary files and directories for the signing process.
+ * #################################################
+ */
+const failedFiles: string[] = [];
+
 async function* walkPdfFiles(dir: string): AsyncGenerator<string> {
   const dirents = await fs.promises.readdir(dir, { withFileTypes: true });
   for (const dirent of dirents) {
@@ -213,7 +223,11 @@ async function signAndCleanupBatch(
 
     await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
 
-    await signer.sign(pdfPath, outputPath);
+    try {
+      await signer.sign(pdfPath, outputPath);
+    } catch (error) {
+      failedFiles.push(pdfPath.split(path.sep).pop() || pdfPath);
+    }
 
     await fs.promises.unlink(pdfPath);
 
@@ -224,124 +238,163 @@ async function signAndCleanupBatch(
   }
 }
 
-ipcMain.on('sign-pdfs', async (event, { eSignText, password, cert, files }) => {
-  try {
-    const tempFileManager = new TempFileManager();
+export type FilePayload = {
+  name: string;
+  buffer: Buffer | ArrayBuffer | string;
+};
 
-    const signedOutputDir = path.join(
-      os.homedir(),
-      `signed-pdfs-${Date.now()}`,
-    );
+export type CertPayload = {
+  name: string;
+  buffer: Buffer | ArrayBuffer | string;
+};
 
-    tempFileManager.saveCert(cert);
+export type OptionsPayload = {
+  password: string;
+  eSignText: string;
+  rememberCert: boolean;
+};
 
-    const pdfFiles = files.filter(
-      (file: File) => path.extname(file.name).toLowerCase() === '.pdf',
-    );
-    const zipFile = files.find(
-      (file: File) => path.extname(file.name).toLowerCase() === '.zip',
-    );
+export type SignPdfsArgs = {
+  cert: CertPayload;
+  files: FilePayload[];
+  options: OptionsPayload;
+};
 
-    const certPath = tempFileManager.getCertPath();
-    const pdfDir = tempFileManager.getPdfDir();
+ipcMain.on(
+  'sign-pdfs',
+  async (event, { cert, files, options }: SignPdfsArgs) => {
+    const { password, eSignText } = options;
 
-    if (!fs.existsSync(signedOutputDir)) {
-      fs.mkdirSync(signedOutputDir);
-    }
+    try {
+      const tempFileManager = new TempFileManager();
 
-    if (pdfFiles.length > 0) {
-      tempFileManager.savePDFs(pdfFiles);
-
-      const signer = new PDFSigner(eSignText, certPath!, password);
-      for (let i = 0; i < pdfFiles.length; i++) {
-        const pdf = pdfFiles[i];
-        const inputFilePath = path.join(pdfDir, pdf.name);
-        const outputFilePath = path.join(signedOutputDir, pdf.name);
-
-        await signer.sign(inputFilePath, outputFilePath);
-
-        const progress = Math.round(((i + 1) / pdfFiles.length) * 100);
-        const message = `Signed ${i + 1} of ${pdfFiles.length} PDFs.`;
-        event.reply('sign-progress', JSON.stringify({ progress, message }));
-      }
-    }
-
-    if (zipFile) {
-      let message = `Processing ZIP file: ${zipFile.name}`;
-      event.reply('sign-progress', JSON.stringify({ progress: 0, message }));
-
-      const zipFilePath = path.join(pdfDir, zipFile.name);
-      fs.writeFileSync(zipFilePath, zipFile.buffer);
-
-      const extractDir = path.join(pdfDir, path.parse(zipFile.name).name);
-      if (!fs.existsSync(extractDir)) {
-        fs.mkdirSync(extractDir, { recursive: true });
-      }
-
-      await new Promise((resolve, reject) => {
-        fs.createReadStream(zipFilePath)
-          .pipe(unzip.Extract({ path: extractDir }))
-          .on('close', resolve)
-          .on('error', reject);
-      });
-
-      fs.unlinkSync(zipFilePath);
-
-      async function countPdfs(dir: string): Promise<number> {
-        let count = 0;
-        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            count += await countPdfs(fullPath);
-          } else if (
-            entry.isFile() &&
-            path.extname(entry.name).toLowerCase() === '.pdf'
-          ) {
-            count++;
-          }
-        }
-        return count;
-      }
-
-      const totalZippedPdfs = await countPdfs(extractDir);
-
-      const signer = new PDFSigner(eSignText, certPath!, password);
-      const pdfGenerator = walkPdfFiles(extractDir);
-
-      // Process zipped PDFs chunked with deletion after signing
-      await processPdfChunks(
-        pdfGenerator,
-        extractDir,
-        signedOutputDir,
-        signer,
-        event,
-        totalZippedPdfs,
+      const signedOutputDir = path.join(
+        os.homedir(),
+        `signed-pdfs-${Date.now()}`,
       );
+
+      tempFileManager.saveCert(cert);
+
+      const pdfFiles = files.filter(
+        (file: FilePayload) => path.extname(file.name).toLowerCase() === '.pdf',
+      );
+      const zipFile = files.find(
+        (file: FilePayload) => path.extname(file.name).toLowerCase() === '.zip',
+      );
+
+      const certPath = tempFileManager.getCertPath();
+      const pdfDir = tempFileManager.getPdfDir();
+
+      if (!fs.existsSync(signedOutputDir)) {
+        fs.mkdirSync(signedOutputDir);
+      }
+
+      if (pdfFiles.length > 0) {
+        tempFileManager.savePDFs(pdfFiles);
+
+        const signer = new PDFSigner(eSignText, certPath!, password);
+        for (let i = 0; i < pdfFiles.length; i++) {
+          const pdf = pdfFiles[i];
+          const inputFilePath = path.join(pdfDir, pdf.name);
+          const outputFilePath = path.join(signedOutputDir, pdf.name);
+
+          try {
+            await signer.sign(inputFilePath, outputFilePath);
+          } catch (error) {
+            failedFiles.push(pdf.name.split(path.sep).pop() || pdf.name);
+          }
+
+          const progress = Math.round(((i + 1) / pdfFiles.length) * 100);
+          const message = `Signed ${i + 1} of ${pdfFiles.length} PDFs.`;
+          event.reply('sign-progress', JSON.stringify({ progress, message }));
+        }
+      }
+
+      if (zipFile) {
+        let message = `Processing ZIP file: ${zipFile.name}`;
+        event.reply('sign-progress', JSON.stringify({ progress: 0, message }));
+
+        const zipFilePath = path.join(pdfDir, zipFile.name);
+        fs.writeFileSync(zipFilePath, zipFile.buffer as Buffer);
+
+        const extractDir = path.join(pdfDir, path.parse(zipFile.name).name);
+        if (!fs.existsSync(extractDir)) {
+          fs.mkdirSync(extractDir, { recursive: true });
+        }
+
+        await new Promise((resolve, reject) => {
+          fs.createReadStream(zipFilePath)
+            .pipe(unzip.Extract({ path: extractDir }))
+            .on('close', resolve)
+            .on('error', reject);
+        });
+
+        fs.unlinkSync(zipFilePath);
+
+        async function countPdfs(dir: string): Promise<number> {
+          let count = 0;
+          const entries = await fs.promises.readdir(dir, {
+            withFileTypes: true,
+          });
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              count += await countPdfs(fullPath);
+            } else if (
+              entry.isFile() &&
+              path.extname(entry.name).toLowerCase() === '.pdf'
+            ) {
+              count++;
+            }
+          }
+          return count;
+        }
+
+        const totalZippedPdfs = await countPdfs(extractDir);
+
+        const signer = new PDFSigner(eSignText, certPath!, password);
+        const pdfGenerator = walkPdfFiles(extractDir);
+
+        await processPdfChunks(
+          pdfGenerator,
+          extractDir,
+          signedOutputDir,
+          signer,
+          event,
+          totalZippedPdfs,
+        );
+      }
+
+      const sendMessage = (
+        success: boolean,
+        message: string,
+        outputDir: string,
+        failedFiles: string[],
+      ) => JSON.stringify({ success, message, outputDir, failedFiles });
+
+      event.reply(
+        'sign-complete',
+        sendMessage(
+          true,
+          'PDFs signed successfully!',
+          signedOutputDir,
+          failedFiles,
+        ),
+      );
+
+      tempFileManager.cleanup();
+    } catch (error: any) {
+      console.error('Error signing PDFs:', error);
+
+      event.sender.send('sign-complete', {
+        success: false,
+        message: 'Error signing PDFs',
+        error: error.message,
+        failedFiles: failedFiles,
+      });
     }
-
-    const sendMessage = (
-      success: boolean,
-      message: string,
-      outputDir: string,
-    ) => JSON.stringify({ success, message, outputDir });
-
-    event.reply(
-      'sign-complete',
-      sendMessage(true, 'PDFs signed successfully!', signedOutputDir),
-    );
-
-    tempFileManager.cleanup();
-  } catch (error: any) {
-    console.error('Error signing PDFs:', error);
-
-    event.sender.send('sign-complete', {
-      success: false,
-      message: 'Error signing PDFs',
-      error: error.message,
-    });
-  }
-});
+  },
+);
 
 ipcMain.handle('open-signed-dir-files', async (event, dirPath: string) => {
   try {

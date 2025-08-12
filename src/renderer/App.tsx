@@ -11,14 +11,16 @@ function Index() {
   const [rememberESignText, setRememberESignText] = useState(true);
 
   const [certName, setCertName] = useState('');
+  const [cert, setCert] = useState<File | null>(null);
+  const [rememberCert, setRememberCert] = useState(true);
 
   const [password, setPassword] = useState('');
   const [rememberPassword, setRememberPassword] = useState(true);
 
   const [outputDir, setOutputDir] = useState('');
 
-  const [cert, setCert] = useState<File | null>(null);
   const [filesToSign, setFilesToSign] = useState<File[]>([]);
+  const [failedFiles, setFailedFiles] = useState<string[]>([]);
 
   const [signing, setSigning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -41,6 +43,10 @@ function Index() {
   window.electron.ipcRenderer.on('sign-complete', (args: any) => {
     const parsedArgs = JSON.parse(args as string);
 
+    if (parsedArgs.failedFiles) {
+      setFailedFiles(parsedArgs.failedFiles);
+    }
+
     if (parsedArgs.success) {
       setProgress(100);
       setProgressMessage(t('Signing completed successfully!'));
@@ -61,12 +67,12 @@ function Index() {
       return 'Certificate password is required.';
     }
 
-    if (!cert) {
-      return 'Certificate is required.';
-    }
-
     if (filesToSign.length === 0) {
       return 'At least one PDF file or a ZIP file is required.';
+    }
+
+    if (!certName || !cert) {
+      return 'Please select a certificate file.';
     }
 
     return null;
@@ -100,6 +106,12 @@ function Index() {
       localStorage.setItem('password', password);
     }
 
+    if (!rememberCert) {
+      handleCleanupRememberCert();
+    } else {
+      localStorage.setItem('certName', certName);
+    }
+
     setSigning(true);
     setShowProgress(true);
     setProgress(0);
@@ -124,11 +136,32 @@ function Index() {
     }
 
     window.electron.ipcRenderer.sendMessage('sign-pdfs', {
-      eSignText,
-      password,
       cert: certBuffer,
       files: filesToSignBuffered,
+      options: {
+        password,
+        eSignText,
+      },
     });
+  };
+
+  const handleChangeInputCertFile = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setCert(file);
+    setCertName(file.name);
+  };
+
+  const handleChangeRememberCert = () => {
+    setRememberCert(!rememberCert);
+
+    if (cert) {
+      setCertName(cert.name);
+      localStorage.setItem('certName', cert.name);
+    }
   };
 
   const handleFilesDrop = (files: FileList | File[]) => {
@@ -169,9 +202,14 @@ function Index() {
     event.stopPropagation();
   };
 
-  const handleRestart = () => {
+  const handleCleanupRememberCert = () => {
+    setRememberCert(false);
     setCert(null);
     setCertName('');
+    localStorage.removeItem('certName');
+  };
+
+  const handleRestart = () => {
     setFilesToSign([]);
     setSigning(false);
     setShowProgress(false);
@@ -179,6 +217,11 @@ function Index() {
     setProgress(0);
     setProgressMessage('');
     setShowProgress(false);
+    setFailedFiles([]);
+
+    if (!rememberCert) {
+      handleCleanupRememberCert();
+    }
   };
 
   const ESignTextComponent = () => (
@@ -207,17 +250,22 @@ function Index() {
       <input
         type="file"
         accept=".p12,.pfx"
-        onChange={(e) => {
-          setCert(e.target.files?.[0] || null);
-          setCertName(e.target.files?.[0]?.name || '');
-        }}
+        onChange={handleChangeInputCertFile}
       />
-      {cert && (
+      {certName && (
         <div className="file-info">
           {t('Selected certificate:')}{' '}
           <strong>{certName.substring(0, 35)}</strong>
         </div>
       )}
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={rememberCert}
+          onChange={handleChangeRememberCert}
+        />
+        {t('Remember certificate')}
+      </label>
     </div>
   );
 
@@ -296,6 +344,43 @@ function Index() {
     </div>
   );
 
+  const ErrorPDFsLogComponent = () => (
+    <div className="error-log">
+      <div className="error-log-header">
+        <svg
+          width="16"
+          height="16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 9v2m0 4h.01M21 12A9
+             9 0 113 12a9 9 0 0118 0z"
+          />
+        </svg>
+        <h4>Some files failed to sign</h4>
+      </div>
+
+      <div className="error-log-list">
+        <ul>
+          {failedFiles.map((file, i) => (
+            <li key={i} title={file}>
+              {file}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="error-log-footer">
+        Please check these files and try again.
+      </div>
+    </div>
+  );
+
   useEffect(() => {
     if (outputDir !== '') {
       setProgressMessage('Opening signed files directory...');
@@ -331,6 +416,22 @@ function Index() {
   }, [rememberPassword]);
 
   useEffect(() => {
+    if (rememberCert) {
+      const savedCertName = localStorage.getItem('certName');
+
+      if (savedCertName) {
+        setCertName(savedCertName);
+      }
+    }
+  }, [rememberCert]);
+
+  useEffect(() => {
+    if (!cert) {
+      handleCleanupRememberCert();
+    }
+  }, [cert]);
+
+  useEffect(() => {
     window.electron.api.onLanguageChange((lang: string) => {
       i18n.changeLanguage(lang);
     });
@@ -350,6 +451,8 @@ function Index() {
         <div className="progress">
           <div className="progress-bar" style={{ width: `${progress}%` }} />
           <div className="progress-message">{t(progressMessage)}</div>
+
+          {failedFiles.length > 0 && <ErrorPDFsLogComponent />}
         </div>
       )}
 

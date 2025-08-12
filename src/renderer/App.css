@@ -240,3 +240,61 @@ body {
   display: none;
 }
 
+.error-log {
+  margin-top: 1rem;
+  border: 1px solid #f5c2c7;
+  border-radius: 8px;
+  background-color: #fef2f2;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  overflow: hidden;
+  text-align: left;
+}
+
+.error-log-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #fee2e2;
+  border-bottom: 1px solid #f5c2c7;
+  padding: 0.5rem 0.75rem;
+}
+
+.error-log-header h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.error-log-header svg {
+  flex-shrink: 0;
+  color: #dc2626;
+}
+
+.error-log-list {
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  color: #991b1b;
+}
+
+.error-log-list ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin: 0;
+}
+
+.error-log-list li {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.error-log-footer {
+  background-color: #fee2e2;
+  border-top: 1px solid #f5c2c7;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: #b91c1c;
+}
