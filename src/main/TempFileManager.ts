@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { FilePayload } from './main';
+import { FilePayload } from './types';
 
 export class TempFileManager {
   private baseDir: string;

@@ -18,6 +18,7 @@ import { TempFileManager } from './TempFileManager';
 import fs from 'fs';
 import os from 'os';
 import { PDFSigner } from './PDFSigner';
+import { FilePayload, SignPdfsArgs } from './types';
 const unzip = require('unzipper');
 
 class AppUpdater {
@@ -233,32 +234,16 @@ async function signAndCleanupBatch(
 
     const totalProcessed = processedCount + i + 1;
     const progress = Math.round((totalProcessed / totalPdfCount) * 100);
-    const message = `Signed ${totalProcessed} of ${totalPdfCount} PDFs in zip file.`;
-    event.reply('sign-progress', JSON.stringify({ progress, message }));
+    event.reply(
+      'sign-progress',
+      JSON.stringify({
+        progress,
+        messageKey: 'signZipProgress',
+        messageData: { totalProcessed, totalPdfCount },
+      }),
+    );
   }
 }
-
-export type FilePayload = {
-  name: string;
-  buffer: Buffer | ArrayBuffer | string;
-};
-
-export type CertPayload = {
-  name: string;
-  buffer: Buffer | ArrayBuffer | string;
-};
-
-export type OptionsPayload = {
-  password: string;
-  eSignText: string;
-  rememberCert: boolean;
-};
-
-export type SignPdfsArgs = {
-  cert: CertPayload;
-  files: FilePayload[];
-  options: OptionsPayload;
-};
 
 ipcMain.on(
   'sign-pdfs',
@@ -268,12 +253,9 @@ ipcMain.on(
     try {
       const tempFileManager = new TempFileManager();
 
-      const signedOutputDir = path.join(
-        os.homedir(),
-        `signed-pdfs-${Date.now()}`,
-      );
-
       tempFileManager.saveCert(cert);
+      const certPath = tempFileManager.getCertPath();
+      const pdfDir = tempFileManager.getPdfDir();
 
       const pdfFiles = files.filter(
         (file: FilePayload) => path.extname(file.name).toLowerCase() === '.pdf',
@@ -282,8 +264,10 @@ ipcMain.on(
         (file: FilePayload) => path.extname(file.name).toLowerCase() === '.zip',
       );
 
-      const certPath = tempFileManager.getCertPath();
-      const pdfDir = tempFileManager.getPdfDir();
+      const signedOutputDir = path.join(
+        os.homedir(),
+        `signed-pdfs-${Date.now()}`,
+      );
 
       if (!fs.existsSync(signedOutputDir)) {
         fs.mkdirSync(signedOutputDir);
@@ -305,14 +289,26 @@ ipcMain.on(
           }
 
           const progress = Math.round(((i + 1) / pdfFiles.length) * 100);
-          const message = `Signed ${i + 1} of ${pdfFiles.length} PDFs.`;
-          event.reply('sign-progress', JSON.stringify({ progress, message }));
+          event.reply(
+            'sign-progress',
+            JSON.stringify({
+              progress,
+              messageKey: 'signPdfProgress',
+              messageData: { i: i + 1, pdfFiles: pdfFiles.length },
+            }),
+          );
         }
       }
 
       if (zipFile) {
-        let message = `Processing ZIP file: ${zipFile.name}`;
-        event.reply('sign-progress', JSON.stringify({ progress: 0, message }));
+        event.reply(
+          'sign-progress',
+          JSON.stringify({
+            progress: 0,
+            messageKey: 'processingZipFile',
+            messageData: { zipName: zipFile.name },
+          }),
+        );
 
         const zipFilePath = path.join(pdfDir, zipFile.name);
         fs.writeFileSync(zipFilePath, zipFile.buffer as Buffer);

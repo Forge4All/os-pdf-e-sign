@@ -24,7 +24,7 @@ function Index() {
 
   const [signing, setSigning] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [progressMessage, setProgressMessage] = useState('');
+  const [progressMessage, setProgressMessage] = useState<string>('');
 
   const [showRestartButton, setShowRestartButton] = useState(false);
 
@@ -34,10 +34,26 @@ function Index() {
 
   window.electron.ipcRenderer.on('sign-progress', (args) => {
     if (!args) return;
-    const { progress, message } = JSON.parse(args as string);
+    const { progress, messageKey, messageData } = JSON.parse(args as string);
 
     setProgress(progress);
-    setProgressMessage(message);
+
+    if (messageKey === 'signZipProgress') {
+      const { totalProcessed, totalPdfCount } = messageData;
+      setProgressMessage(
+        t('signZipProgress', { totalProcessed, totalPdfCount }),
+      );
+    }
+
+    if (messageKey === 'signPdfProgress') {
+      const { i, pdfFiles } = messageData;
+      setProgressMessage(t('signPdfProgress', { i, pdfFiles }));
+    }
+
+    if (messageKey === 'processingZipFile') {
+      const { zipName } = messageData;
+      setProgressMessage(t('processingZipFile', { zipName }));
+    }
   });
 
   window.electron.ipcRenderer.on('sign-complete', (args: any) => {
@@ -49,13 +65,11 @@ function Index() {
 
     if (parsedArgs.success) {
       setProgress(100);
-      setProgressMessage(t('Signing completed successfully!'));
       setOutputDir(parsedArgs.outputDir);
-    } else {
-      setProgress(0);
-      setProgressMessage(t('Error signing files.'));
-      setShowRestartButton(true);
     }
+
+    setProgressMessage(t(parsedArgs.message));
+    setShowRestartButton(true);
   });
 
   const handleInputsValidation = async () => {
@@ -94,7 +108,7 @@ function Index() {
     const result = await handleInputsValidation();
 
     if (result) {
-      alert(result);
+      alert(t(result));
       return;
     }
 
@@ -115,7 +129,7 @@ function Index() {
     setSigning(true);
     setShowProgress(true);
     setProgress(0);
-    setProgressMessage('Signing PDFs...');
+    setProgressMessage(t('Signing PDFs...'));
 
     if (!cert) return;
     const certBuffer = await convertFileToBuffer(cert).then((buffer) => ({
@@ -164,6 +178,16 @@ function Index() {
     }
   };
 
+  const handleOnChangeESignText = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    setESignText(event.target.value);
+
+    if (rememberESignText) {
+      localStorage.setItem('eSignText', event.target.value);
+    }
+  };
+
   const handleFilesDrop = (files: FileList | File[]) => {
     const fileArray = Array.from(files);
 
@@ -181,9 +205,10 @@ function Index() {
 
     if (zipFiles.length > 0) {
       if (zipFiles.length > 1) {
-        alert('Only one ZIP file can be selected at a time.');
+        alert(t('Only one ZIP file can be selected at a time.'));
         return;
       }
+
       setFilesToSign((prev) => [...prev, ...zipFiles]);
     }
   };
@@ -209,6 +234,14 @@ function Index() {
     localStorage.removeItem('certName');
   };
 
+  const handleChangeInputFiles = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    if (event.target.files) {
+      handleFilesDrop(event.target.files);
+    }
+  };
+
   const handleRestart = () => {
     setFilesToSign([]);
     setSigning(false);
@@ -231,7 +264,7 @@ function Index() {
         type="text"
         placeholder={t('Type here the certificate password')}
         value={eSignText}
-        onChange={(e) => setESignText(e.target.value)}
+        onChange={handleOnChangeESignText}
       />
       <label className="checkbox">
         <input
@@ -335,11 +368,7 @@ function Index() {
         accept="application/pdf, .zip"
         multiple
         className="hidden"
-        onChange={(e) => {
-          if (e.target.files) {
-            handleFilesDrop(e.target.files);
-          }
-        }}
+        onChange={handleChangeInputFiles}
       />
     </div>
   );
@@ -362,7 +391,7 @@ function Index() {
              9 0 113 12a9 9 0 0118 0z"
           />
         </svg>
-        <h4>Some files failed to sign</h4>
+        <h4>{t('Some files failed to sign')}</h4>
       </div>
 
       <div className="error-log-list">
@@ -376,18 +405,18 @@ function Index() {
       </div>
 
       <div className="error-log-footer">
-        Please check these files and try again.
+        {t('Please check the files and try again.')}
       </div>
     </div>
   );
 
   useEffect(() => {
     if (outputDir !== '') {
-      setProgressMessage('Opening signed files directory...');
+      setProgressMessage(t('Opening signed files directory...'));
 
       setTimeout(() => {
         window.electron.api.openSignedDirFiles(outputDir);
-        setProgressMessage('Diretório aberto com sucesso!');
+        setProgressMessage(t('Signed PDFs is now available!'));
         setShowRestartButton(true);
       }, 1000);
     }
@@ -450,7 +479,7 @@ function Index() {
       {showProgress && (
         <div className="progress">
           <div className="progress-bar" style={{ width: `${progress}%` }} />
-          <div className="progress-message">{t(progressMessage)}</div>
+          <div className="progress-message">{progressMessage}</div>
 
           {failedFiles.length > 0 && <ErrorPDFsLogComponent />}
         </div>
